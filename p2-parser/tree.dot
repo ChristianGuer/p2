@@ -1,0 +1,7 @@
+digraph AST {
+1 [shape=box, label="VarDecl name='foo'"];
+2 [shape=box, label="VarDecl name='bar'"];
+0 [shape=box, label="Program\nsymbolTable: \n  print_int : (int) -> void\n  print_bool : (bool) -> void\n  print_str : (str) -> void\n  foo : int\n  bar : bool"];
+0 -> 1;
+0 -> 2;
+}

@@ -1,0 +1,40 @@
+==583286== Memcheck, a memory error detector
+==583286== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==583286== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==583286== Command: ../decaf inputs/add.decaf
+==583286== 
+Invalid type 'def' on line 1
+==583286== 
+==583286== HEAP SUMMARY:
+==583286==     in use at exit: 320 bytes in 3 blocks
+==583286==   total heap usage: 1,726 allocs, 1,723 frees, 183,024 bytes allocated
+==583286== 
+==583286== 24 bytes in 1 blocks are definitely lost in loss record 1 of 3
+==583286==    at 0x484D953: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==583286==    by 0x10C633: NodeList_new (ast.c:44)
+==583286==    by 0x10990E: parse_program (p2-parser.c:165)
+==583286==    by 0x109984: parse (p2-parser.c:178)
+==583286==    by 0x10DFD5: main (main.c:98)
+==583286== 
+==583286== 24 bytes in 1 blocks are definitely lost in loss record 2 of 3
+==583286==    at 0x484D953: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==583286==    by 0x10C633: NodeList_new (ast.c:44)
+==583286==    by 0x109917: parse_program (p2-parser.c:166)
+==583286==    by 0x109984: parse (p2-parser.c:178)
+==583286==    by 0x10DFD5: main (main.c:98)
+==583286== 
+==583286== 272 bytes in 1 blocks are definitely lost in loss record 3 of 3
+==583286==    at 0x484D953: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==583286==    by 0x10DA4E: Token_new (token.c:56)
+==583286==    by 0x10E40C: lex (p1-lexer.c:78)
+==583286==    by 0x10DFBF: main (main.c:95)
+==583286== 
+==583286== LEAK SUMMARY:
+==583286==    definitely lost: 320 bytes in 3 blocks
+==583286==    indirectly lost: 0 bytes in 0 blocks
+==583286==      possibly lost: 0 bytes in 0 blocks
+==583286==    still reachable: 0 bytes in 0 blocks
+==583286==         suppressed: 0 bytes in 0 blocks
+==583286== 
+==583286== For lists of detected and suppressed errors, rerun with: -s
+==583286== ERROR SUMMARY: 3 errors from 3 contexts (suppressed: 0 from 0)
