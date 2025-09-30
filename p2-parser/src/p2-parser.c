@@ -181,8 +181,26 @@ ASTNode *parse_vardecl(TokenQueue *input)
   DecafType tokenType = parse_type(input);
   char name[MAX_TOKEN_LEN];
   parse_id(input, name);
-  match_and_discard_next_token(input, SYM, ";");
+  if (check_next_token(input, SYM, "["))
+  {
+    // array decleration
+    TokenQueue_remove(input);
+    Token *peek = TokenQueue_peek(input);
+    int array_length;
+    if (peek->type == DECLIT)
+    {
+      array_length = atoi(TokenQueue_remove(input)->text);
+    }
+    else if (check_next_token_type(input, HEXLIT))
+    {
+      array_length = strtol(TokenQueue_remove(input)->text, NULL, 16);
+    }
+    match_and_discard_next_token(input, SYM, "]");
+    match_and_discard_next_token(input, SYM, ";");
+    return VarDeclNode_new(name, tokenType, true, array_length, line);
+  }
 
+  match_and_discard_next_token(input, SYM, ";");
   return VarDeclNode_new(name, tokenType, false, 1, line);
 }
 
