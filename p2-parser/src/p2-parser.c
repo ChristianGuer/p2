@@ -7,6 +7,9 @@
 ASTNode *parse_program(TokenQueue *input);
 ASTNode *parse_vardecl(TokenQueue *input);
 DecafType parse_type(TokenQueue *input);
+ASTNode *parse_conditional(TokenQueue *input);
+ASTNode *parse_expression(TokenQueue *input);
+ASTNode *parse_block(TokenQueue *input);
 void parse_id(TokenQueue *input, char *buffer);
 
 /*
@@ -185,7 +188,6 @@ ASTNode *parse_vardecl(TokenQueue *input)
 
 ASTNode *breakout_helper(TokenQueue *input)
 {
-  int value;
   int line = TokenQueue_peek(input)->line;
   Token *keyword = TokenQueue_peek(input);
   if (!strcmp(keyword->text, "continue"))
@@ -203,48 +205,16 @@ ASTNode *breakout_helper(TokenQueue *input)
   else if (!strcmp(keyword->text, "return"))
   {
     discard_next_token(input);
-    if (check_next_token_type(input, SYM))
+    if (check_next_token(input, SYM, ";"))
     {
-      match_and_discard_next_token(input, SYM, ";");
+      TokenQueue_remove(input);
       return ReturnNode_new(NULL, line);
-    }
-    else if (check_next_token_type(input, ID))
-    {
-      // TODO check if part of greater expression
-      char name[MAX_TOKEN_LEN];
-      parse_id(input, name);
-      match_and_discard_next_token(input, SYM, ";");
-      return ReturnNode_new(LocationNode_new(name, NULL, line), line);
-    }
-    else if (check_next_token_type(input, DECLIT))
-    {
-      value = atoi(TokenQueue_remove(input)->text);
-      match_and_discard_next_token(input, SYM, ";");
-      return ReturnNode_new(LiteralNode_new_int(value, line), line);
-    }
-    else if (check_next_token_type(input, HEXLIT))
-    {
-      value = strtol(TokenQueue_remove(input)->text, NULL, 16);
-      match_and_discard_next_token(input, SYM, ";");
-      return ReturnNode_new(LiteralNode_new_int(value, line), line);
-    }
-    else if (check_next_token_type(input, STRLIT))
-    {
-      // Remove leading and trailing quotes
-      char *strLit = TokenQueue_remove(input)->text;
-      size_t len = strlen(strLit) - 2;
-      char *parsed_str = malloc(len + 1);
-      strncpy(parsed_str, strLit + 1, len);
-      parsed_str[len] = '\0';
-
-      ASTNode *str = LiteralNode_new_string(parsed_str, line);
-      free(parsed_str);
-      match_and_discard_next_token(input, SYM, ";");
-      return ReturnNode_new(str, line);
     }
     else
     {
-      Error_throw_printf("invalid return");
+      ASTNode *ret = parse_expression(input);
+      match_and_discard_next_token(input, SYM, ";");
+      return ReturnNode_new(ret, line);
     }
   }
   return NULL;
@@ -263,34 +233,7 @@ ASTNode *parse_assignment(TokenQueue *input)
 
   // parse value
   ASTNode *value;
-  Token *token_value = TokenQueue_peek(input);
-  if (check_next_token_type(input, DECLIT))
-  {
-    value = LiteralNode_new_int(atoi(token_value->text), line);
-  }
-  else if (check_next_token_type(input, HEXLIT))
-  {
-    value = LiteralNode_new_int(strtol(token_value->text, NULL, 16), line);
-  }
-  else if (check_next_token_type(input, STRLIT))
-  {
-    value = LiteralNode_new_string(token_value->text, line);
-  }
-  else if (check_next_token(input, KEY, "true") ||
-           check_next_token(input, KEY, "false"))
-  {
-    value = LiteralNode_new_bool(strcmp(token_value->text, "false"), line);
-  }
-  else if (check_next_token_type(input, ID))
-  {
-    // TODO add function calls later
-    value = LocationNode_new(token_value->text, NULL, line);
-  }
-  else
-  {
-    Error_throw_printf("Invalid assignment");
-  }
-  discard_next_token(input);
+  value = parse_expression(input);
   match_and_discard_next_token(input, SYM, ";");
   return AssignmentNode_new(left, value, line);
 }
@@ -323,6 +266,20 @@ ASTNode *type_helper(TokenQueue *input)
     TokenQueue_remove(input);
     return LiteralNode_new_bool(strcmp(peek->text, "false"), line);
   }
+  else if (check_next_token_type(input, STRLIT))
+  {
+    // Remove leading and trailing quotes
+    char *strLit = TokenQueue_remove(input)->text;
+    size_t len = strlen(strLit) - 2;
+    char *parsed_str = malloc(len + 1);
+    strncpy(parsed_str, strLit + 1, len);
+    parsed_str[len] = '\0';
+
+    ASTNode *str = LiteralNode_new_string(parsed_str, line);
+    free(parsed_str);
+    return str;
+  }
+  return NULL;
 }
 
 BinaryOpType op_type_helper(TokenQueue *input)
@@ -382,7 +339,18 @@ BinaryOpType op_type_helper(TokenQueue *input)
   {
     return MODOP;
   }
-  Error_throw_printf("Invalid operator");
+  return 13;
+}
+
+ASTNode *parse_while(TokenQueue *input)
+{
+  int line = TokenQueue_peek(input)->line;
+  match_and_discard_next_token(input, KEY, "while");
+  match_and_discard_next_token(input, SYM, "(");
+  ASTNode *expression = parse_expression(input);
+  match_and_discard_next_token(input, SYM, ")");
+  ASTNode *block = parse_block(input);
+  return WhileLoopNode_new(expression, block, line);
 }
 
 ASTNode *parse_expression(TokenQueue *input)
@@ -403,12 +371,6 @@ ASTNode *parse_expression(TokenQueue *input)
       return UnaryOpNode_new(NOTOP, LiteralNode_new_bool(value, line), line);
     }
   }
-  else if (check_next_token(input, KEY, "true") || check_next_token(input, KEY, "false"))
-  {
-    // boolean base case
-    peek = TokenQueue_remove(input);
-    return LiteralNode_new_bool(strcmp(peek->text, "false"), line);
-  }
   else
   {
     // left side of expression
@@ -416,29 +378,17 @@ ASTNode *parse_expression(TokenQueue *input)
 
     // Get binary operator from helper
     BinaryOpType operator = op_type_helper(input);
+    if (operator > 12)
+    {
+      // Next token not operator
+      return left;
+    }
+    TokenQueue_remove(input);
 
     ASTNode *right = type_helper(input);
     return BinaryOpNode_new(operator, left, right, line);
   }
-}
-
-ASTNode *parse_conditional(TokenQueue *input)
-{
-  int line = TokenQueue_peek(input)->line;
-  match_and_discard_next_token(input, KEY, "if");
-  match_and_discard_next_token(input, SYM, "(");
-  ASTNode *expression = parse_expression(input);
-  match_and_discard_next_token(input, SYM, ")");
-  ASTNode *block = parse_block(input);
-  if (check_next_token(input, KEY, "else"))
-  {
-    ASTNode *else_block = parse_block(input);
-    return ConditionalNode_new(expression, block, else_block, line);
-  }
-  else
-  {
-    return ConditionalNode_new(expression, block, NULL, line);
-  }
+  return NULL;
 }
 
 ASTNode *parse_block(TokenQueue *input)
@@ -458,18 +408,56 @@ ASTNode *parse_block(TokenQueue *input)
     next = TokenQueue_peek(input);
   }
   // Loop for assignments TODO modify to accept every statement
-  while (next->type == ID)
+  ASTNode *current;
+  while (next->type == ID || next->type == KEY)
   {
-    ASTNode *assignment = parse_assignment(input);
-    NodeList_add(stmts, assignment);
+    if (next->type == ID)
+    {
+      // handle assignment and function call
+      current = parse_assignment(input);
+    }
+    else
+    {
+      if (check_next_token(input, KEY, "if"))
+      {
+        current = parse_conditional(input);
+      }
+      else if (check_next_token(input, KEY, "while"))
+      {
+        current = parse_while(input);
+      }
+      else
+      {
+        // else should be a breakout statement throw error if not
+        current = breakout_helper(input);
+      }
+    }
+    NodeList_add(stmts, current);
     next = TokenQueue_peek(input);
   }
-  ASTNode *breakOut = breakout_helper(input);
-  NodeList_add(stmts, breakOut);
 
   // match brackets and return
   match_and_discard_next_token(input, SYM, "}");
   return BlockNode_new(vars, stmts, line);
+}
+
+ASTNode *parse_conditional(TokenQueue *input)
+{
+  int line = TokenQueue_peek(input)->line;
+  match_and_discard_next_token(input, KEY, "if");
+  match_and_discard_next_token(input, SYM, "(");
+  ASTNode *expression = parse_expression(input);
+  match_and_discard_next_token(input, SYM, ")");
+  ASTNode *block = parse_block(input);
+  if (check_next_token(input, KEY, "else"))
+  {
+    ASTNode *else_block = parse_block(input);
+    return ConditionalNode_new(expression, block, else_block, line);
+  }
+  else
+  {
+    return ConditionalNode_new(expression, block, NULL, line);
+  }
 }
 
 ParameterList *param_helper(TokenQueue *input)
