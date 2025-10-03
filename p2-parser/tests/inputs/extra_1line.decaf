@@ -1,0 +1,2 @@
+def int     gcd(int a, int b){int temp;while (b!=0){temp = b;b = a % b;a = temp;}return a;}
+//does he want us to include error for not main? "Program does not contain a 'main' function"

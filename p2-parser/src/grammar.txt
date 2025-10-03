@@ -1,3 +1,52 @@
+program        → var_decl* func_decl* EOF
+
+type           → 'int' | 'bool' | 'void'
+
+var_decl       → type ID ('[' INTLIT ']')? ';'          // arrays are 1-D
+
+func_decl      → 'def' type ID '(' params? ')' block
+params         → param (',' param)*
+param          → type ID
+
+block          → '{' var_decl* stmt* '}'
+
+stmt           → assignment ';'
+               | func_call ';'
+               | 'if' '(' expr ')' block ('else' block)?
+               | 'while' '(' expr ')' block
+               | 'return' ';'
+               | 'return' expr ';'
+               | 'break' ';'
+               | 'continue' ';'
+
+assignment     → location '=' expr
+location       → ID ('[' expr ']')?                     // nums[i], x
+
+func_call      → ID '(' args? ')'
+args           → expr (',' expr)*
+
+/* Expression precedence (highest → lowest), all left-associative */
+
+expr           → or_expr
+or_expr        → and_expr        ('||' and_expr)*
+and_expr       → eq_expr         ('&&' eq_expr)*
+eq_expr        → rel_expr        (('==' | '!=') rel_expr)*
+rel_expr       → add_expr        (('<' | '<=' | '>' | '>=') add_expr)*
+add_expr       → mul_expr        (('+' | '-') mul_expr)*
+mul_expr       → unary           (('*' | '/' | '%') unary)*
+unary          → ('!' | '-') unary | primary
+primary        → literal
+               | location
+               | func_call
+               | '(' expr ')'
+
+literal        → INTLIT | BOOLLIT | STRINGLIT
+BOOLLIT        → 'true' | 'false'
+
+
+
+
+
 /**
  * @file p2-parser.c
  * @brief Compiler phase 2: parser
@@ -10,7 +59,6 @@ DecafType parse_type(TokenQueue *input);
 ASTNode *parse_conditional(TokenQueue *input);
 ASTNode *parse_expression(TokenQueue *input);
 ASTNode *parse_block(TokenQueue *input);
-static ASTNode* parse_location_after_id( TokenQueue* in);
 void parse_id(TokenQueue *input, char *buffer);
 
 /*
@@ -234,6 +282,7 @@ ASTNode *breakout_helper(TokenQueue *input)
     else
     {
       ASTNode *ret = parse_expression(input);
+      printf("expecting ;\n");
       match_and_discard_next_token(input, SYM, ";");
       return ReturnNode_new(ret, line);
     }
@@ -241,34 +290,25 @@ ASTNode *breakout_helper(TokenQueue *input)
   return NULL;
 }
 
-ASTNode *parse_id_cases(TokenQueue *input)
+ASTNode *parse_assignment(TokenQueue *input)
 {
   // parse id
+  int line = TokenQueue_peek(input)->line;
+  char name[MAX_TOKEN_LEN];
+  parse_id(input, name);
+  ASTNode *left = LocationNode_new(name, NULL, line);
 
-  ASTNode *left;
-  left = parse_location_after_id(input);
-  //ASTNode *left = LocationNode_new(name, NULL, line);
+  // parse =
+  match_and_discard_next_token(input, SYM, "=");
 
-  // test if it is an assignment or func call
-  if ( check_next_token(input, SYM, "=")){
-    //confirmed assingment
-    match_and_discard_next_token(input, SYM, "=");
-
-    // parse value
-    int line = TokenQueue_peek(input)->line;
-    ASTNode *value;
-    value = parse_expression(input);
-    match_and_discard_next_token(input, SYM, ";");
-    return AssignmentNode_new(left, value, line);
-  } else{
-    //must be a func call
-    match_and_discard_next_token(input, SYM, ";");
-    return left;
-  }
-
+  // parse value
+  ASTNode *value;
+  value = parse_expression(input);
+  match_and_discard_next_token(input, SYM, ";");
+  return AssignmentNode_new(left, value, line);
 }
+
 // Helper returns ASTNode representation of bool, int, variable.
-/*
 ASTNode *type_helper(TokenQueue *input)
 {
   Token *peek = TokenQueue_peek(input);
@@ -313,7 +353,7 @@ ASTNode *type_helper(TokenQueue *input)
   }
   return NULL;
 }
-*/
+
 BinaryOpType op_type_helper(TokenQueue *input)
 {
   char value[MAX_TOKEN_LEN];
@@ -337,7 +377,7 @@ BinaryOpType op_type_helper(TokenQueue *input)
   }
   if (!strcmp(value, "<"))
   {
-    return LTOP;
+    return LEOP;
   }
   if (!strcmp(value, "<="))
   {
@@ -385,6 +425,48 @@ ASTNode *parse_while(TokenQueue *input)
   return WhileLoopNode_new(expression, block, line);
 }
 
+/*
+ASTNode *parse_expression(TokenQueue *input)
+{
+  // TODO this will need to be redone for Left associativity
+  // TODO add functionality for parethesis
+  // TODO add function call compatibility
+  int line = TokenQueue_peek(input)->line;
+  Token *peek;
+  // check for !(op) case: need to add function call compatibility later
+  if (check_next_token(input, SYM, "!"))
+  {
+    TokenQueue_remove(input);
+    if (check_next_token(input, SYM, "!"))
+    {
+      Error_throw_printf("Multiple binary operations");
+    }
+    ASTNode *expression = parse_expression(input);
+    return UnaryOpNode_new(NOTOP, expression, line);
+  }
+  else
+  {
+    // left side of 
+    //if we need left associativy, then we need to loop here
+
+    ASTNode *left = type_helper(input);
+
+    // Get binary operator from helper
+    BinaryOpType operator = op_type_helper(input);
+    if (operator > 12)
+    {
+      // Next token not operator
+      return left;
+    }
+    TokenQueue_remove(input);
+
+    ASTNode *right = type_helper(input);
+    return BinaryOpNode_new(operator, left, right, line);
+  }
+  return NULL;
+}
+*/
+
 //MY EXPERIMENTAL CODE with left associativity and precedence annd no ambiguity
 /* ========= unary: '!' | '-' | primary ========= */
 // unary → ('!' | '-') primary | primary
@@ -403,22 +485,12 @@ static NodeList* parse_arglist(TokenQueue* in) {
   }
   return args;
 }
-
-static ASTNode* parse_location_after_id( TokenQueue* in) {
-    int line = TokenQueue_peek(in)->line;
+static ASTNode* parse_location_after_id(Token* idTok, TokenQueue* in) {
   char name[MAX_ID_LEN];
-  parse_id(in,name);
+  snprintf(name, sizeof(name), "%s", idTok->text);
+  int line = idTok->line;
 
   ASTNode* index = NULL;
-
- if (check_next_token(in, SYM, "(")) {
-        match_and_discard_next_token(in, SYM, "(");
-        NodeList* args = parse_arglist(in);
-        match_and_discard_next_token(in, SYM, ")");
-        ASTNode* call = FuncCallNode_new(name, args, line);
-        return call;
- }   
-
   if (check_next_token(in, SYM, "[")) {
     match_and_discard_next_token(in, SYM, "[");
     index = parse_expression(in);           // full expr as index
@@ -426,7 +498,6 @@ static ASTNode* parse_location_after_id( TokenQueue* in) {
   }
   return LocationNode_new(name, index, line);
 }
-
 
 static ASTNode* parse_primary(TokenQueue* in) {
   if (TokenQueue_is_empty(in))
@@ -457,7 +528,6 @@ static ASTNode* parse_primary(TokenQueue* in) {
     Token_free(tok);
     return n;
   }
-  //Fix This to strip extra '\' from output
   if (t->type == STRLIT) {
     Token* tok = TokenQueue_remove(in);
     size_t len = strlen(tok->text);
@@ -477,11 +547,21 @@ static ASTNode* parse_primary(TokenQueue* in) {
     return n;
   }
 
-
   /* ID → func_call | location */
   if (t->type == ID) {
+    Token* idTok = TokenQueue_remove(in);
 
-    ASTNode* loc = parse_location_after_id( in);
+    if (check_next_token(in, SYM, "(")) {
+      match_and_discard_next_token(in, SYM, "(");
+      NodeList* args = parse_arglist(in);
+      match_and_discard_next_token(in, SYM, ")");
+      ASTNode* call = FuncCallNode_new(idTok->text, args, idTok->line);
+      Token_free(idTok);
+      return call;
+    }
+
+    ASTNode* loc = parse_location_after_id(idTok, in);
+    Token_free(idTok);
     return loc;
   }
 
@@ -609,11 +689,12 @@ ASTNode *parse_expression(TokenQueue *input){
 ASTNode *parse_statement(TokenQueue *input)
 {
   Token *next = TokenQueue_peek(input);
+  TokenQueue_print(input, stdout);
   ASTNode *current;
   if (next->type == ID)
   {
     // handle assignment and function call
-    current = parse_id_cases(input);
+    current = parse_assignment(input);
   }
   else
   {
@@ -774,8 +855,5 @@ ASTNode *parse_program(TokenQueue *input)
 }
 
 ASTNode *parse(TokenQueue *input) { 
-  if (input == NULL) {
-    Error_throw_printf("Input token queue is NULL\n");
-  }
   //TokenQueue_print(input, stdout);
   return parse_program(input); }
