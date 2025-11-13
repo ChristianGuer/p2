@@ -267,53 +267,7 @@ ASTNode *parse_id_cases(TokenQueue *input)
   }
 
 }
-// Helper returns ASTNode representation of bool, int, variable.
-/*
-ASTNode *type_helper(TokenQueue *input)
-{
-  Token *peek = TokenQueue_peek(input);
-  printf("text helper: %s\n", peek->text);
-  printf("Type helper: %d\n", peek->type);
-  int line = peek->line;
-  char name[MAX_TOKEN_LEN];
-  int value;
 
-  if (peek->type == ID)
-  {
-    parse_id(input, name);
-    return LocationNode_new(name, NULL, line);
-  }
-  else if (peek->type == DECLIT)
-  {
-    value = atoi(TokenQueue_remove(input)->text);
-    return LiteralNode_new_int(value, line);
-  }
-  else if (check_next_token_type(input, HEXLIT))
-  {
-    value = strtol(TokenQueue_remove(input)->text, NULL, 16);
-    return LiteralNode_new_int(value, line);
-  }
-  else if (check_next_token(input, KEY, "true") || check_next_token(input, KEY, "false"))
-  {
-    TokenQueue_remove(input);
-    return LiteralNode_new_bool(strcmp(peek->text, "false"), line);
-  }
-  else if (check_next_token_type(input, STRLIT))
-  {
-    // Remove leading and trailing quotes
-    char *strLit = TokenQueue_remove(input)->text;
-    size_t len = strlen(strLit) - 2;
-    char *parsed_str = malloc(len + 1);
-    strncpy(parsed_str, strLit + 1, len);
-    parsed_str[len] = '\0';
-
-    ASTNode *str = LiteralNode_new_string(parsed_str, line);
-    free(parsed_str);
-    return str;
-  }
-  return NULL;
-}
-*/
 BinaryOpType op_type_helper(TokenQueue *input)
 {
   char value[MAX_TOKEN_LEN];
